@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("RETAIL") // RETAIL, WHOLESALE_PENDING, WHOLESALE_APPROVED, ADMIN
+  accounts      Account[]
+  sessions      Session[]
+  orders        Order[]
+  reviews       Review[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  savedAddresses SavedAddress[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id             String    @id @default(cuid())
+  name           String
+  description    String
+  category       String    @default("Jeans")
+  color          String    @default("Blue")
+  size           String    @default("32")
+  fit            String    @default("Regular")
+  gender         String    @default("Unisex")
+  featured       Boolean   @default(false)
+  basePrice      Float
+  baseWholesalePrice Float
+  stock          Int
+  imageUrl       String?
+  tierDiscounts  TierDiscount[]
+  orderItems     OrderItem[]
+  reviews        Review[]
+  cartItems      CartItem[]
+  wishlistItems  WishlistItem[]
+}
+
+model TierDiscount {
+  id            String  @id @default(cuid())
+  productId     String
+  minQuantity   Int
+  discountPct   Float
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  userId          String
+  totalAmount     Float
+  status          String   @default("PENDING") // PENDING, SHIPPED, DELIVERED
+  paymentMode     String   @default("CASH_ON_DELIVERY")
+  customerName    String   @default("")
+  customerPhone   String   @default("")
+  customerEmail   String   @default("")
+  shippingAddress String   @default("")
+  shippingCity    String   @default("")
+  shippingState   String   @default("")
+  shippingPincode String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  pricePaid Float
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int      // 1-5
+  comment   String   @default("")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([userId, productId])
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int     @default(1)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([userId, productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@unique([userId, productId])
+}
+
+model SavedAddress {
+  id        String  @id @default(cuid())
+  userId    String
+  label     String  @default("Home") // Home, Work, Other
+  name      String
+  phone     String
+  address   String
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PageView {
+  id        String   @id @default(cuid())
+  page      String   // e.g. "/products", "/products/xyz"
+  sessionId String   @default("") // anonymous session tracking
+  userId    String?  // logged-in user (optional)
+  createdAt DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  event     String   // "add_to_cart", "purchase", "wishlist_add", "page_view"
+  productId String?
+  userId    String?
+  metadata  String   @default("{}") // JSON string for extra data
+  createdAt DateTime @default(now())
+}
