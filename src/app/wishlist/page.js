@@ -7,13 +7,13 @@ export default function WishlistPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchWishlist(); }, []);
-
   const fetchWishlist = async () => {
     const res = await fetch('/api/wishlist');
     if (res.ok) setItems(await res.json());
     setLoading(false);
   };
+
+  useEffect(() => { fetchWishlist(); }, []);
 
   const removeItem = async (productId) => {
     await fetch('/api/wishlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId }) });

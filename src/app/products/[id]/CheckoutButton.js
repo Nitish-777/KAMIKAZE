@@ -11,7 +11,7 @@ const INDIAN_STATES = [
   'Delhi', 'Jammu & Kashmir', 'Ladakh', 'Chandigarh', 'Puducherry'
 ];
 
-export default function CheckoutButton({ productId, productName, price, maxStock, isWholesale }) {
+export default function CheckoutButton({ productId, productName, price, maxStock, isWholesale, selectedSize }) {
   const [step, setStep] = useState(0);
   const [quantity, setQuantity] = useState(isWholesale ? 50 : 1);
   const [loading, setLoading] = useState(false);
@@ -67,7 +67,7 @@ export default function CheckoutButton({ productId, productName, price, maxStock
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: [{ productId, quantity: parseInt(quantity) }],
+        items: [{ productId, quantity: parseInt(quantity), size: selectedSize || "32" }],
         paymentMode, ...details,
         paymentId
       })
@@ -75,7 +75,7 @@ export default function CheckoutButton({ productId, productName, price, maxStock
     setLoading(false);
     if (res.ok) {
       const data = await res.json();
-      alert(`Order Placed Successfully! Order ID: ${data.orderId?.slice(0, 8)}`);
+      alert(`Order Placed Successfully! Order ID: ${data.orderId}`);
       router.push('/');
     } else {
       const data = await res.json();
@@ -85,7 +85,7 @@ export default function CheckoutButton({ productId, productName, price, maxStock
   };
 
   const processPaymentAndOrder = async () => {
-    if (paymentMode === 'ONLINE') {
+    if (paymentMode === 'CARD' || paymentMode === 'UPI' || paymentMode === 'ONLINE') {
       setLoading(true);
       const loadRazorpay = () => new Promise(resolve => {
         if (window.Razorpay) return resolve(true);
@@ -271,9 +271,9 @@ export default function CheckoutButton({ productId, productName, price, maxStock
             <label style={{ ...labelStyle, marginBottom: '8px', display: 'block' }}>Payment Method</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {[
+                { value: 'CARD', label: '💳 Credit / Debit / ATM Card', desc: 'Add and secure cards as per RBI guidelines' },
+                { value: 'UPI', label: '📱 UPI', desc: 'Pay using any UPI app' },
                 { value: 'CASH_ON_DELIVERY', label: '💵 Cash On Delivery', desc: 'Pay when you receive' },
-                { value: 'BANK_TRANSFER', label: '🏦 Bank Transfer', desc: 'Direct bank payment' },
-                { value: 'ONLINE', label: '💳 Online Payment', desc: 'UPI / Card / Net Banking' },
               ].map(pm => (
                 <label key={pm.value} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',

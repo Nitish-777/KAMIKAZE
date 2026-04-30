@@ -137,11 +137,22 @@
 
 @media (max-width: 768px) {
   .filters {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.5rem;
+  }
+
+  .filters::-webkit-scrollbar {
+    display: none;
   }
 
   .filters input,
   .filters select {
-    max-width: 100% !important;
+    flex-shrink: 0;
+    width: max-content;
+    max-width: none !important;
   }
 }

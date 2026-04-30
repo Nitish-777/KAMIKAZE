@@ -23,41 +23,41 @@ export default function ProductFilters({ fits, colors, genders, currentFit, curr
 
   return (
     <div className={styles.filters} suppressHydrationWarning>
-      <input
+      <input suppressHydrationWarning
         type="text" placeholder="Search jeans..." defaultValue={currentSearch}
         className="input-field" style={{ maxWidth: 180 }}
         onKeyDown={(e) => { if (e.key === 'Enter') apply('search', e.target.value); }}
       />
 
-      <select value={currentSize || ''} onChange={(e) => apply('size', e.target.value)} className="input-field" style={{ maxWidth: 100 }}>
+      <select suppressHydrationWarning value={currentSize || ''} onChange={(e) => apply('size', e.target.value)} className="input-field" style={{ maxWidth: 100 }}>
         <option value="">All Sizes</option>
         {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
       </select>
 
-      <select value={currentFit} onChange={(e) => apply('fit', e.target.value)} className="input-field" style={{ maxWidth: 120 }}>
+      <select suppressHydrationWarning value={currentFit} onChange={(e) => apply('fit', e.target.value)} className="input-field" style={{ maxWidth: 120 }}>
         <option value="">All Fits</option>
         {fits.map(f => <option key={f} value={f}>{f}</option>)}
       </select>
 
-      <select value={currentColor} onChange={(e) => apply('color', e.target.value)} className="input-field" style={{ maxWidth: 140 }}>
+      <select suppressHydrationWarning value={currentColor} onChange={(e) => apply('color', e.target.value)} className="input-field" style={{ maxWidth: 140 }}>
         <option value="">All Colors</option>
         {colors.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
 
-      <select value={currentGender} onChange={(e) => apply('gender', e.target.value)} className="input-field" style={{ maxWidth: 120 }}>
+      <select suppressHydrationWarning value={currentGender} onChange={(e) => apply('gender', e.target.value)} className="input-field" style={{ maxWidth: 120 }}>
         <option value="">Gender</option>
         {genders.map(g => <option key={g} value={g}>{g}</option>)}
       </select>
 
-      <input type="number" placeholder="Min ₹" defaultValue={currentMinPrice}
+      <input suppressHydrationWarning type="number" placeholder="Min ₹" defaultValue={currentMinPrice}
         className="input-field" style={{ maxWidth: 90 }}
         onBlur={(e) => apply('minPrice', e.target.value)} />
 
-      <input type="number" placeholder="Max ₹" defaultValue={currentMaxPrice}
+      <input suppressHydrationWarning type="number" placeholder="Max ₹" defaultValue={currentMaxPrice}
         className="input-field" style={{ maxWidth: 90 }}
         onBlur={(e) => apply('maxPrice', e.target.value)} />
 
-      <select value={currentSort} onChange={(e) => apply('sort', e.target.value)} className="input-field" style={{ maxWidth: 140 }}>
+      <select suppressHydrationWarning value={currentSort} onChange={(e) => apply('sort', e.target.value)} className="input-field" style={{ maxWidth: 140 }}>
         <option value="">Sort By</option>
         <option value="price_low">Price: Low → High</option>
         <option value="price_high">Price: High → Low</option>

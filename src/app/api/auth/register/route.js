@@ -1,9 +1,16 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { createRateLimitResponse } from "@/lib/rateLimiter";
 
 export async function POST(req) {
   try {
+    // Rate limit: 3 registration attempts per hour per IP
+    const rateLimitCheck = createRateLimitResponse(req, null, 'register');
+    if (rateLimitCheck.rateLimitExceeded) {
+      return rateLimitCheck.response;
+    }
+
     const { name, email, password } = await req.json();
 
     if (!email || !password || !name) {
@@ -25,7 +32,11 @@ export async function POST(req) {
       data: { name, email, password: hashedPassword, role: "RETAIL" }
     });
 
-    return NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true });
+    Object.entries(rateLimitCheck.headers).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to create account" }, { status: 500 });

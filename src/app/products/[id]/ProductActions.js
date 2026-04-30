@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function ProductActions({ productId, maxStock }) {
+export default function ProductActions({ productId, maxStock, selectedSize }) {
   const [addingCart, setAddingCart] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [cartMsg, setCartMsg] = useState('');
@@ -12,7 +12,7 @@ export default function ProductActions({ productId, maxStock }) {
     setAddingCart(true); setCartMsg('');
     const res = await fetch('/api/cart', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productId, quantity: 1 })
+      body: JSON.stringify({ productId, quantity: 1, size: selectedSize })
     });
     setAddingCart(false);
     if (res.ok) {

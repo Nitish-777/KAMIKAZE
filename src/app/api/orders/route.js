@@ -2,17 +2,29 @@ import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { createRateLimitResponse } from "@/lib/rateLimiter";
 
-export async function GET() {
+export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit: 20 requests per hour per user
+  const rateLimitCheck = createRateLimitResponse(req, session.user.id, 'orders');
+  if (rateLimitCheck.rateLimitExceeded) {
+    return rateLimitCheck.response;
+  }
 
   const orders = await prisma.order.findMany({
     where: { userId: session.user.id },
     include: { items: { include: { product: { select: { name: true, imageUrl: true } } } } },
     orderBy: { createdAt: 'desc' }
   });
-  return NextResponse.json(orders);
+  
+  const response = NextResponse.json(orders);
+  Object.entries(rateLimitCheck.headers).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
 }
 
 export async function POST(req) {
@@ -20,6 +32,12 @@ export async function POST(req) {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit: 20 orders per hour per user
+    const rateLimitCheck = createRateLimitResponse(req, session.user.id, 'orders');
+    if (rateLimitCheck.rateLimitExceeded) {
+      return rateLimitCheck.response;
     }
 
     const body = await req.json();
@@ -74,7 +92,7 @@ export async function POST(req) {
         if (discountPct > 0) unitPrice = unitPrice - (unitPrice * (discountPct / 100));
 
         totalAmount += unitPrice * item.quantity;
-        orderItemsRecord.push({ productId: product.id, quantity: item.quantity, pricePaid: unitPrice });
+        orderItemsRecord.push({ productId: product.id, quantity: item.quantity, pricePaid: unitPrice, size: item.size || "32" });
 
         // Auto-reduce stock
         await tx.product.update({
@@ -83,8 +101,11 @@ export async function POST(req) {
         });
       }
 
+      const customOrderId = 'ORD' + Math.random().toString(36).substring(2, 10).toUpperCase() + Date.now().toString(36).toUpperCase();
+
       const order = await tx.order.create({
         data: {
+          id: customOrderId,
           userId, totalAmount,
           paymentMode: paymentMode || "CASH_ON_DELIVERY",
           customerName: customerName.trim(),
@@ -105,7 +126,11 @@ export async function POST(req) {
       return order;
     });
 
-    return NextResponse.json({ success: true, orderId: result.id });
+    const response = NextResponse.json({ success: true, orderId: result.id });
+    Object.entries(rateLimitCheck.headers).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error) {
     console.error(error);
     const msg = error.message?.includes('Insufficient stock') || error.message?.includes('not found')

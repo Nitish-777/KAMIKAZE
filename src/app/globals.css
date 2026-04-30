@@ -130,8 +130,15 @@ button {
 /* Layout Utilities */
 .grid-products {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 2rem;
+}
+
+@media (max-width: 640px) {
+  .grid-products {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
 }
 
 /* Typography Utilities */

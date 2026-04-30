@@ -103,6 +103,7 @@ model OrderItem {
   productId String
   quantity  Int
   pricePaid Float
+  size      String  @default("32")
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 }
@@ -113,6 +114,7 @@ model Review {
   productId String
   rating    Int      // 1-5
   comment   String   @default("")
+  imageUrl  String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -124,9 +126,10 @@ model CartItem {
   userId    String
   productId String
   quantity  Int     @default(1)
+  size      String  @default("32")
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  @@unique([userId, productId])
+  @@unique([userId, productId, size])
 }
 
 model WishlistItem {

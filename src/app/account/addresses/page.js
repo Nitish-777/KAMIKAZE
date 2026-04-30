@@ -36,6 +36,19 @@ export default function SavedAddressesPage() {
 
   const labelStyle = { fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' };
 
+  const handleUseExistingAddress = (address) => {
+    setForm({ 
+      label: address.label, 
+      name: address.name, 
+      phone: address.phone, 
+      address: address.address, 
+      city: address.city, 
+      state: address.state, 
+      pincode: address.pincode, 
+      isDefault: false 
+    });
+  };
+
   if (loading) return <div className="container" style={{ padding: '4rem 20px', textAlign: 'center' }}>Loading...</div>;
 
   return (
@@ -46,6 +59,41 @@ export default function SavedAddressesPage() {
           {showForm ? 'Cancel' : '+ Add Address'}
         </button>
       </div>
+
+      {showForm && (
+        <>
+          {addresses.length > 0 && (
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 'var(--rounded-md)', padding: '1rem', marginBottom: '1.5rem' }}>
+              <p style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem', color: '#1e40af' }}>💡 Quick Suggestions</p>
+              <p style={{ fontSize: '0.85rem', color: '#1e40af', marginBottom: '0.75rem' }}>Use one of your previously saved addresses:</p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {addresses.map(a => (
+                  <button 
+                    key={a.id}
+                    type="button"
+                    onClick={() => handleUseExistingAddress(a)}
+                    style={{ 
+                      padding: '8px 12px', 
+                      borderRadius: '6px', 
+                      border: '1px solid #93c5fd', 
+                      background: 'white',
+                      color: '#1e40af',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.background = '#dbeafe'}
+                    onMouseOut={(e) => e.target.style.background = 'white'}
+                  >
+                    {a.label}: {a.city}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)', borderRadius: 'var(--rounded-md)', padding: '1.5rem', marginBottom: '1.5rem' }}>

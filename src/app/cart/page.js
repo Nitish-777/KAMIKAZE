@@ -16,17 +16,22 @@ export default function CartPage() {
   const [details, setDetails] = useState({ customerName: '', customerPhone: '', customerEmail: '', shippingAddress: '', shippingCity: '', shippingState: '', shippingPincode: '' });
   const router = useRouter();
 
-  useEffect(() => { fetchCart(); }, []);
-
   const fetchCart = async () => {
     const res = await fetch('/api/cart');
     if (res.ok) setItems(await res.json());
     setLoading(false);
   };
 
+  useEffect(() => { fetchCart(); }, []);
+
   const updateQty = async (cartItemId, quantity) => {
     await fetch('/api/cart', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cartItemId, quantity }) });
     setItems(items.map(i => i.id === cartItemId ? { ...i, quantity } : i));
+  };
+
+  const updateSize = async (cartItemId, size) => {
+    await fetch('/api/cart', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cartItemId, size }) });
+    setItems(items.map(i => i.id === cartItemId ? { ...i, size } : i));
   };
 
   const removeItem = async (cartItemId) => {
@@ -60,7 +65,7 @@ export default function CartPage() {
     const res = await fetch('/api/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+        items: items.map(i => ({ productId: i.productId, quantity: i.quantity, size: i.size })),
         paymentMode, ...details, fromCart: true, paymentId
       })
     });
@@ -79,7 +84,7 @@ export default function CartPage() {
   const processPaymentAndOrder = async () => {
     if (!validateDetails()) return;
     
-    if (paymentMode === 'ONLINE') {
+    if (paymentMode === 'CARD' || paymentMode === 'UPI' || paymentMode === 'ONLINE') {
       setPlacing(true);
       const loadRazorpay = () => new Promise(resolve => {
         if (window.Razorpay) return resolve(true);
@@ -155,7 +160,13 @@ export default function CartPage() {
                 </Link>
                 <div style={{ flex: 1 }}>
                   <Link href={`/products/${item.product.id}`} style={{ fontWeight: 600, fontSize: '0.95rem' }}>{item.product.name}</Link>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>{item.product.fit} · {item.product.color} · Size {item.product.size}</p>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {item.product.fit} · {item.product.color} · 
+                    <span>Size:</span>
+                    <select value={item.size} onChange={(e) => updateSize(item.id, e.target.value)} style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '2px 4px', fontSize: '0.8rem', outline: 'none' }}>
+                      {['26', '28', '30', '32', '34', '36', '38', '40', '42'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                   <p style={{ fontWeight: 700, marginTop: '6px' }}>₹{item.product.basePrice.toFixed(2)}</p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                     <button onClick={() => updateQty(item.id, Math.max(1, item.quantity - 1))} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.85rem' }}>−</button>
@@ -201,10 +212,17 @@ export default function CartPage() {
 
           <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>Payment</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {[{ v: 'CASH_ON_DELIVERY', l: '💵 Cash On Delivery' }, { v: 'BANK_TRANSFER', l: '🏦 Bank Transfer' }, { v: 'ONLINE', l: '💳 Online Payment' }].map(p => (
+            {[
+              { v: 'CARD', l: '💳 Credit / Debit / ATM Card', desc: 'Add and secure cards as per RBI guidelines' }, 
+              { v: 'UPI', l: '📱 UPI', desc: 'Pay using any UPI app' }, 
+              { v: 'CASH_ON_DELIVERY', l: '💵 Cash On Delivery', desc: 'Pay when you receive' }
+            ].map(p => (
               <label key={p.v} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', border: `2px solid ${paymentMode === p.v ? 'var(--color-primary)' : 'var(--color-border)'}`, borderRadius: 'var(--rounded-md)', cursor: 'pointer', background: paymentMode === p.v ? 'var(--color-bg-alt)' : 'transparent' }}>
                 <input type="radio" name="pm" value={p.v} checked={paymentMode === p.v} onChange={() => setPaymentMode(p.v)} />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.l}</span>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{p.l}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{p.desc}</div>
+                </div>
               </label>
             ))}
           </div>

@@ -77,7 +77,7 @@ export default async function ProductsPage({ searchParams }) {
       />
 
       <div className="grid-products">
-        {products.map(product => {
+        {products.map((product, index) => {
           const avgRating = product.reviews.length > 0
             ? product.reviews.reduce((sum, r) => sum + r.rating, 0) / product.reviews.length
             : 0;
@@ -85,7 +85,7 @@ export default async function ProductsPage({ searchParams }) {
           return (
             <Link href={`/products/${product.id}`} key={product.id} className={`${styles.productCard} hover-lift`}>
               <div className={styles.imageWrapper}>
-                <Image src={product.imageUrl || '/kamikaze_logo.png'} alt={product.name} fill sizes="(max-width: 768px) 100vw, 33vw" className={styles.productImage} loading="lazy" />
+                <Image src={product.imageUrl || '/kamikaze_logo.png'} alt={product.name} fill sizes="(max-width: 768px) 100vw, 33vw" className={styles.productImage} priority={index < 4} />
                 {product.stock === 0 && <div className={styles.soldOut}>Sold Out</div>}
                 {product.featured && <div className={styles.featuredTag}>Featured</div>}
                 {product.stock > 0 && product.stock <= 5 && <div className={styles.lowStock}>Only {product.stock} left!</div>}

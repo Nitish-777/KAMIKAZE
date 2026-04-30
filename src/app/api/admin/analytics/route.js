@@ -15,11 +15,18 @@ export async function GET() {
     const thisWeek = new Date(today);
     thisWeek.setDate(today.getDate() - today.getDay());
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const sixMonths = new Date();
+    sixMonths.setMonth(now.getMonth() - 6);
+    
+    const oneYear = new Date();
+    oneYear.setFullYear(now.getFullYear() - 1);
 
     const [
       viewsToday, viewsWeek, viewsMonth,
       purchasesToday, purchasesWeek, purchasesMonth,
-      cartsToday, cartsWeek, cartsMonth
+      cartsToday, cartsWeek, cartsMonth,
+      revDay, revWeek, revMonth, rev6Month, revYear
     ] = await Promise.all([
       prisma.pageView.count({ where: { createdAt: { gte: today } } }),
       prisma.pageView.count({ where: { createdAt: { gte: thisWeek } } }),
@@ -31,13 +38,26 @@ export async function GET() {
       
       prisma.analyticsEvent.count({ where: { event: 'add_to_cart', createdAt: { gte: today } } }),
       prisma.analyticsEvent.count({ where: { event: 'add_to_cart', createdAt: { gte: thisWeek } } }),
-      prisma.analyticsEvent.count({ where: { event: 'add_to_cart', createdAt: { gte: thisMonth } } })
+      prisma.analyticsEvent.count({ where: { event: 'add_to_cart', createdAt: { gte: thisMonth } } }),
+
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { createdAt: { gte: today } } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { createdAt: { gte: thisWeek } } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { createdAt: { gte: thisMonth } } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { createdAt: { gte: sixMonths } } }),
+      prisma.order.aggregate({ _sum: { totalAmount: true }, where: { createdAt: { gte: oneYear } } })
     ]);
 
     return NextResponse.json({
       pageViews: { today: viewsToday, weekly: viewsWeek, monthly: viewsMonth },
       purchases: { today: purchasesToday, weekly: purchasesWeek, monthly: purchasesMonth },
-      carts: { today: cartsToday, weekly: cartsWeek, monthly: cartsMonth }
+      carts: { today: cartsToday, weekly: cartsWeek, monthly: cartsMonth },
+      revenue: {
+        daily: revDay._sum.totalAmount || 0,
+        weekly: revWeek._sum.totalAmount || 0,
+        monthly: revMonth._sum.totalAmount || 0,
+        sixMonths: rev6Month._sum.totalAmount || 0,
+        yearly: revYear._sum.totalAmount || 0
+      }
     });
   } catch (error) {
     console.error("Analytics Error:", error);

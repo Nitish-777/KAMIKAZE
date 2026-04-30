@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import styles from './page.module.css';
 import CheckoutButton from './CheckoutButton';
 import ProductActions from './ProductActions';
+import ProductInteractiveSection from './ProductInteractiveSection';
 import ReviewSection from './ReviewSection';
 
 export async function generateMetadata({ params }) {
@@ -84,19 +85,12 @@ export default async function ProductDetailPage({ params }) {
 
         <p className={styles.description}>{product.description}</p>
 
-        {/* Add to Cart + Wishlist — hide for admin */}
-        {!isAdmin && (
-          <div style={{ marginBottom: '1rem' }}>
-            <ProductActions productId={product.id} maxStock={product.stock} />
-          </div>
-        )}
-
-        {/* Buy Now Direct — hide for admin */}
-        {!isAdmin && (
-          <div className={styles.actions}>
-            <CheckoutButton productId={product.id} productName={product.name} price={price} maxStock={product.stock} isWholesale={isWholesale} />
-          </div>
-        )}
+        <ProductInteractiveSection 
+          product={product} 
+          price={price} 
+          isWholesale={isWholesale} 
+          isAdmin={isAdmin} 
+        />
       </div>
 
       {/* Reviews Section - Full Width Below */}
