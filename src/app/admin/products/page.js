@@ -14,7 +14,7 @@ export default async function AdminProductsPage() {
   return (
     <div className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
       <h1>Manage Products</h1>
-      <p className="text-muted" style={{ marginBottom: '2rem' }}>Add, edit, and remove products without touching any code.</p>
+
       <AdminProductsClient />
     </div>
   );

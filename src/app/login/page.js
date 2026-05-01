@@ -7,11 +7,15 @@ import { useRouter } from 'next/navigation';
 const OTP_EXPIRY_SECONDS = 600; // 10 minutes
 
 export default function AuthPage() {
-  const [authMode, setAuthMode] = useState('otp'); // 'otp' | 'password'
+  const [tab, setTab] = useState('signin'); // 'signin' | 'signup'
+  const [authMode, setAuthMode] = useState('password'); // 'password' | 'otp'
   const [otpStep, setOtpStep] = useState('email'); // 'email' | 'verify'
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [password, setPassword] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -169,6 +173,51 @@ export default function AuthPage() {
     }
   };
 
+  // --- Register ---
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!regName.trim() || !regEmail.trim() || !regPassword) {
+      setError('All fields are required');
+      return;
+    }
+    setError(''); setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: regName.trim(), email: regEmail.trim(), password: regPassword }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Registration failed');
+        setLoading(false);
+        return;
+      }
+
+      // Automatically sign in
+      const signInRes = await signIn('credentials', {
+        redirect: false,
+        email: regEmail.trim(),
+        password: regPassword,
+      });
+
+      if (signInRes?.error) {
+        setError('Account created, but sign in failed. Please sign in manually.');
+        setTab('signin');
+        setAuthMode('password');
+      } else {
+        setSuccess('Account created! Redirecting...');
+        router.push('/products');
+        router.refresh();
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    }
+    setLoading(false);
+  };
+
   // --- Styles ---
   const containerStyle = {
     display: 'flex', justifyContent: 'center', alignItems: 'center',
@@ -220,13 +269,13 @@ export default function AuthPage() {
           <p style={{ opacity: 0.7, fontSize: '0.8rem', marginTop: '4px' }}>Premium Denim & Streetwear</p>
         </div>
 
-        {/* Auth Mode Tabs */}
+        {/* Main Tabs */}
         <div style={{ display: 'flex' }}>
-          <button style={tabStyle(authMode === 'otp')} onClick={() => { setAuthMode('otp'); setError(''); setSuccess(''); }}>
-            Email OTP
+          <button style={tabStyle(tab === 'signin')} onClick={() => { setTab('signin'); setError(''); setSuccess(''); }}>
+            Sign In
           </button>
-          <button style={tabStyle(authMode === 'password')} onClick={() => { setAuthMode('password'); setError(''); setSuccess(''); }}>
-            Password
+          <button style={tabStyle(tab === 'signup')} onClick={() => { setTab('signup'); setError(''); setSuccess(''); }}>
+            Sign Up
           </button>
         </div>
 
@@ -243,105 +292,18 @@ export default function AuthPage() {
             </div>
           )}
 
-          {authMode === 'otp' ? (
-            <>
-              {otpStep === 'email' ? (
-                /* Step 1: Enter Email */
-                <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
-                      Email Address
-                    </label>
-                    <input
-                      type="email" className="input-field" value={email}
-                      onChange={(e) => setEmail(e.target.value)} required
-                      placeholder="you@example.com"
-                      autoFocus
-                      style={{ fontSize: '1rem' }}
-                    />
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                    We&apos;ll send a 6-digit verification code to your email
-                  </p>
-                  <button type="submit" className="btn-primary" disabled={loading}
-                    style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
-                    {loading ? 'Sending...' : 'Send Verification Code'}
-                  </button>
-                </form>
-              ) : (
-                /* Step 2: Enter OTP */
-                <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: '0 0 4px' }}>
-                      Code sent to
-                    </p>
-                    <p style={{ fontWeight: 700, fontSize: '0.95rem', margin: '0 0 4px' }}>{email}</p>
-                    <button type="button" onClick={() => { setOtpStep('email'); setError(''); setSuccess(''); }}
-                      style={{ background: 'none', border: 'none', color: 'var(--color-accent)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-                      Change email
-                    </button>
-                  </div>
-
-                  {/* OTP Input Boxes */}
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', margin: '8px 0' }}>
-                    {otp.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={el => { inputRefs.current[i] = el; }}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(i, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                        onPaste={i === 0 ? handleOtpPaste : undefined}
-                        style={{
-                          ...otpInputStyle,
-                          borderColor: digit ? 'var(--color-primary)' : 'var(--color-border)',
-                          boxShadow: digit ? '0 0 0 1px var(--color-primary)' : 'none',
-                        }}
-                        autoFocus={i === 0}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Timer & Resend */}
-                  <div style={{ textAlign: 'center' }}>
-                    {countdown > 0 ? (
-                      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                        Code expires in <strong style={{ color: countdown < 60 ? 'var(--color-accent)' : 'var(--color-primary)' }}>{formatTime(countdown)}</strong>
-                      </p>
-                    ) : (
-                      <p style={{ fontSize: '0.85rem', color: 'var(--color-accent)', fontWeight: 600 }}>
-                        Code expired
-                      </p>
-                    )}
-                    {canResend && (
-                      <button type="button" onClick={handleResendOtp} disabled={loading}
-                        style={{
-                          background: 'none', border: '1px solid var(--color-primary)',
-                          color: 'var(--color-primary)', padding: '8px 20px', borderRadius: 'var(--rounded-md)',
-                          fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', marginTop: '8px',
-                          transition: 'all 0.2s ease',
-                        }}>
-                        {loading ? 'Sending...' : '🔄 Resend Code'}
-                      </button>
-                    )}
-                  </div>
-
-                  <button type="submit" className="btn-primary" disabled={loading || otp.join('').length !== 6}
-                    style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
-                    {loading ? 'Verifying...' : 'Verify & Sign In'}
-                  </button>
-                </form>
-              )}
-            </>
-          ) : (
-            <form onSubmit={handlePasswordLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {tab === 'signup' ? (
+            /* Sign Up Form */
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Full Name</label>
+                <input type="text" className="input-field" value={regName}
+                  onChange={(e) => setRegName(e.target.value)} required placeholder="John Doe" />
+              </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
-                <input type="email" className="input-field" value={email}
-                  onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
+                <input type="email" className="input-field" value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)} required placeholder="you@example.com" />
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
@@ -349,11 +311,12 @@ export default function AuthPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     className="input-field"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
                     required
                     placeholder="••••••••"
                     style={{ paddingRight: '44px' }}
+                    minLength={6}
                   />
                   <button
                     type="button"
@@ -363,17 +326,96 @@ export default function AuthPage() {
                       background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
                       color: 'var(--color-text-muted)', fontSize: '1.1rem', lineHeight: 1,
                     }}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? '🙈' : '👁️'}
                   </button>
                 </div>
               </div>
               <button type="submit" className="btn-primary" disabled={loading}
-                style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
-                {loading ? 'Signing in...' : 'Sign In'}
+                style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '8px' }}>
+                {loading ? 'Creating Account...' : 'Create Account'}
               </button>
             </form>
+          ) : (
+            /* Sign In Form */
+            <>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', background: 'var(--color-bg-alt)', padding: '4px', borderRadius: 'var(--rounded-md)' }}>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('password')}
+                  style={{ flex: 1, padding: '8px', fontSize: '0.85rem', fontWeight: 600, border: 'none', borderRadius: '4px', cursor: 'pointer', background: authMode === 'password' ? 'white' : 'transparent', color: authMode === 'password' ? 'var(--color-primary)' : 'var(--color-text-muted)', boxShadow: authMode === 'password' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.2s' }}
+                >
+                  Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('otp')}
+                  style={{ flex: 1, padding: '8px', fontSize: '0.85rem', fontWeight: 600, border: 'none', borderRadius: '4px', cursor: 'pointer', background: authMode === 'otp' ? 'white' : 'transparent', color: authMode === 'otp' ? 'var(--color-primary)' : 'var(--color-text-muted)', boxShadow: authMode === 'otp' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.2s' }}
+                >
+                  Magic Link
+                </button>
+              </div>
+
+              {authMode === 'otp' ? (
+                <>
+                  {otpStep === 'email' ? (
+                    <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email Address</label>
+                        <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" autoFocus style={{ fontSize: '1rem' }} />
+                      </div>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>We&apos;ll send a 6-digit verification code to your email</p>
+                      <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
+                        {loading ? 'Sending...' : 'Send Verification Code'}
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: '0 0 4px' }}>Code sent to</p>
+                        <p style={{ fontWeight: 700, fontSize: '0.95rem', margin: '0 0 4px' }}>{email}</p>
+                        <button type="button" onClick={() => { setOtpStep('email'); setError(''); setSuccess(''); }} style={{ background: 'none', border: 'none', color: 'var(--color-accent)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Change email</button>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', margin: '8px 0' }}>
+                        {otp.map((digit, i) => (
+                          <input key={i} ref={el => { inputRefs.current[i] = el; }} type="text" inputMode="numeric" maxLength={1} value={digit} onChange={(e) => handleOtpChange(i, e.target.value)} onKeyDown={(e) => handleOtpKeyDown(i, e)} onPaste={i === 0 ? handleOtpPaste : undefined} style={{ ...otpInputStyle, borderColor: digit ? 'var(--color-primary)' : 'var(--color-border)', boxShadow: digit ? '0 0 0 1px var(--color-primary)' : 'none' }} autoFocus={i === 0} />
+                        ))}
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        {countdown > 0 ? (
+                          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Code expires in <strong style={{ color: countdown < 60 ? 'var(--color-accent)' : 'var(--color-primary)' }}>{formatTime(countdown)}</strong></p>
+                        ) : (
+                          <p style={{ fontSize: '0.85rem', color: 'var(--color-accent)', fontWeight: 600 }}>Code expired</p>
+                        )}
+                        {canResend && (
+                          <button type="button" onClick={handleResendOtp} disabled={loading} style={{ background: 'none', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '8px 20px', borderRadius: 'var(--rounded-md)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', marginTop: '8px', transition: 'all 0.2s ease' }}>{loading ? 'Sending...' : '🔄 Resend Code'}</button>
+                        )}
+                      </div>
+                      <button type="submit" className="btn-primary" disabled={loading || otp.join('').length !== 6} style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
+                        {loading ? 'Verifying...' : 'Verify & Sign In'}
+                      </button>
+                    </form>
+                  )}
+                </>
+              ) : (
+                <form onSubmit={handlePasswordLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
+                    <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPassword ? 'text' : 'password'} className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" style={{ paddingRight: '44px' }} />
+                      <button type="button" onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--color-text-muted)', fontSize: '1.1rem', lineHeight: 1 }}>{showPassword ? '🙈' : '👁️'}</button>
+                    </div>
+                  </div>
+                  <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </button>
+                </form>
+              )}
+            </>
           )}
 
           {/* Divider */}
