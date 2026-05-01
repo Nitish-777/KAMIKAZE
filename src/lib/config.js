@@ -1,50 +1,36 @@
 /**
  * Configuration Manager
- * Centralized management of environment variables
- * Validates that all required variables are present
+ * Centralized management of environment variables.
+ * Validation is lazy — only runs when getServerConfig() is first called.
  */
 
-// Import security utilities
 import { assertServerOnly } from './security.js';
 
-/**
- * Validate environment configuration
- * Throws error if required variables are missing
- */
+let validated = false;
+
 function validateConfig() {
+  if (validated) return;
   assertServerOnly('Config validation');
 
-  const required = [
-    'DATABASE_URL',
-    'NEXTAUTH_SECRET',
-    'NEXTAUTH_URL',
-  ];
-
+  const required = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL'];
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required environment variables:\n${missing.map(k => `  - ${k}`).join('\n')}\n` +
-      `Please copy .env.example to .env.local and fill in the required values.`
-    );
+    const msg = `Missing required environment variables:\n${missing.map(k => `  - ${k}`).join('\n')}\nPlease copy .env.example to .env and fill in the required values.`;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(msg);
+    } else {
+      console.warn('⚠ ' + msg);
+    }
   }
+
+  validated = true;
 }
 
-/**
- * Server-side configuration
- * These are only available and should only be used server-side
- */
 export const serverConfig = {
-  database: {
-    url: process.env.DATABASE_URL,
-  },
-  auth: {
-    secret: process.env.NEXTAUTH_SECRET,
-    url: process.env.NEXTAUTH_URL,
-  },
-  api: {
-    url: process.env.API_URL || 'http://localhost:3000/api',
-  },
+  database: { url: process.env.DATABASE_URL },
+  auth: { secret: process.env.NEXTAUTH_SECRET, url: process.env.NEXTAUTH_URL },
+  api: { url: process.env.API_URL || 'http://localhost:3000/api' },
   rateLimit: {
     enabled: process.env.RATE_LIMIT_ENABLED !== 'false',
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
@@ -61,25 +47,9 @@ export const serverConfig = {
   },
 };
 
-/**
- * Get server configuration (server-side only)
- */
 export function getServerConfig() {
-  assertServerOnly('getServerConfig');
-  return serverConfig;
-}
-
-/**
- * Validate configuration on startup
- */
-try {
   validateConfig();
-  console.info('✓ Configuration validated successfully');
-} catch (error) {
-  console.error('✗ Configuration validation failed:', error.message);
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
+  return serverConfig;
 }
 
 export default serverConfig;

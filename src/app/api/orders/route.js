@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 import { createRateLimitResponse } from "@/lib/rateLimiter";
 
 export async function GET(req) {
@@ -45,7 +45,7 @@ export async function POST(req) {
       items, paymentMode,
       customerName, customerPhone, customerEmail,
       shippingAddress, shippingCity, shippingState, shippingPincode,
-      fromCart
+      fromCart, paymentId
     } = body;
 
     if (!items || items.length === 0) {
@@ -108,6 +108,7 @@ export async function POST(req) {
           id: customOrderId,
           userId, totalAmount,
           paymentMode: paymentMode || "CASH_ON_DELIVERY",
+          paymentId: paymentId || null,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           customerEmail: (customerEmail || '').trim(),

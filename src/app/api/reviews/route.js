@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 import { createRateLimitResponse } from "@/lib/rateLimiter";
 
 export async function GET(req) {
@@ -34,28 +34,24 @@ export async function GET(req) {
     }
   }
 
-  // Only show reviews to users who have purchased and received the product
-  let reviews = [];
-  let avgRating = 0;
-  let count = 0;
-
-  if (canReview) {
-    reviews = await prisma.review.findMany({
+  // Reviews are always publicly visible (social proof for buyers)
+  // Only WRITING reviews is restricted to delivered-order users
+  const [reviews, agg] = await Promise.all([
+    prisma.review.findMany({
       where: { productId },
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
-      take: 10
-    });
-
-    const agg = await prisma.review.aggregate({
+      take: 20
+    }),
+    prisma.review.aggregate({
       where: { productId },
       _avg: { rating: true },
       _count: true
-    });
+    }),
+  ]);
 
-    avgRating = agg._avg.rating || 0;
-    count = agg._count;
-  }
+  const avgRating = agg._avg.rating || 0;
+  const count = agg._count;
 
   const response = NextResponse.json({ reviews, avgRating, count, canReview, isAuthenticated });
   Object.entries(rateLimitCheck.headers).forEach(([key, value]) => {

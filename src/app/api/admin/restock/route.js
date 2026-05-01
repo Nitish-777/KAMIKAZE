@@ -1,8 +1,10 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 
+// PUT /api/admin/restock — add or subtract stock
+// Positive amount = add stock, negative amount = subtract stock
 export async function PUT(req) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -10,14 +12,31 @@ export async function PUT(req) {
   }
 
   const { productId, amount } = await req.json();
-  if (!productId || !amount || amount < 1) {
+  if (!productId || amount === undefined || amount === null) {
     return NextResponse.json({ error: "Valid product ID and amount required" }, { status: 400 });
   }
 
-  const product = await prisma.product.update({
+  const parsedAmount = parseInt(amount);
+  if (isNaN(parsedAmount) || parsedAmount === 0) {
+    return NextResponse.json({ error: "Amount must be a non-zero integer" }, { status: 400 });
+  }
+
+  // Fetch current stock to prevent going below 0
+  const current = await prisma.product.findUnique({
     where: { id: productId },
-    data: { stock: { increment: amount } }
+    select: { stock: true },
   });
 
-  return NextResponse.json({ success: true, newStock: product.stock });
+  if (!current) {
+    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  const newStock = Math.max(0, current.stock + parsedAmount);
+
+  const product = await prisma.product.update({
+    where: { id: productId },
+    data: { stock: newStock },
+  });
+
+  return NextResponse.json({ success: true, newStock: product.stock, adjusted: parsedAmount });
 }

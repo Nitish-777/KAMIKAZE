@@ -1,9 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { authOptions } from "@/lib/authOptions";
 
 // GET /api/admin/products — list all products (paginated)
 export async function GET(req) {
@@ -47,6 +45,8 @@ export async function POST(req) {
     }
 
     const formData = await req.formData();
+    const { writeFile, mkdir } = await import("fs/promises");
+    const path = await import("path");
 
     const name = formData.get('name');
     const description = formData.get('description') || '';
@@ -55,28 +55,35 @@ export async function POST(req) {
     const size = formData.get('size') || '32';
     const fit = formData.get('fit') || 'Regular';
     const gender = formData.get('gender') || 'Unisex';
-    const featured = formData.get('featured') === 'true';
+    const displayStatus = formData.get('displayStatus') || 'NORMAL';
+    const featured = displayStatus === 'FEATURED';
     const basePrice = parseFloat(formData.get('basePrice') || '0');
     const baseWholesalePrice = parseFloat(formData.get('baseWholesalePrice') || '0');
     const stock = parseInt(formData.get('stock') || '0');
+    const salePriceRaw = formData.get('salePrice');
+    const salePrice = salePriceRaw && parseFloat(salePriceRaw) > 0 ? parseFloat(salePriceRaw) : null;
     const imageFile = formData.get('image');
 
     if (!name || !basePrice) {
       return NextResponse.json({ error: "Name and price are required" }, { status: 400 });
     }
 
+    if (salePrice !== null && salePrice >= basePrice) {
+      return NextResponse.json({ error: "Sale price must be less than original price" }, { status: 400 });
+    }
+
     let imageUrl = formData.get('imageUrl') || null;
 
     // If an image file was uploaded, save it to /public/uploads/
     if (imageFile && imageFile.size > 0) {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      const uploadsDir = path.default.join(process.cwd(), 'public', 'uploads');
       await mkdir(uploadsDir, { recursive: true });
 
       const bytes = await imageFile.arrayBuffer();
       const buffer = Buffer.from(bytes);
       const ext = imageFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-      const filePath = path.join(uploadsDir, fileName);
+      const filePath = path.default.join(uploadsDir, fileName);
 
       await writeFile(filePath, buffer);
       imageUrl = `/uploads/${fileName}`;
@@ -84,7 +91,8 @@ export async function POST(req) {
 
     const product = await prisma.product.create({
       data: {
-        name, description, category, color, size, fit, gender, featured,
+        name, description, category, color, size, fit, gender,
+        featured, displayStatus, salePrice,
         basePrice, baseWholesalePrice, stock, imageUrl,
         tierDiscounts: {
           create: [
@@ -99,6 +107,51 @@ export async function POST(req) {
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
+  }
+}
+
+// PATCH /api/admin/products — update product fields (displayStatus, salePrice, stock, featured)
+export async function PATCH(req) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, displayStatus, salePrice, stockAdjust } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Product ID required" }, { status: 400 });
+    }
+
+    const updateData = {};
+
+    if (displayStatus !== undefined) {
+      updateData.displayStatus = displayStatus;
+      updateData.featured = displayStatus === 'FEATURED';
+    }
+
+    if (salePrice !== undefined) {
+      updateData.salePrice = salePrice === null || salePrice === '' ? null : parseFloat(salePrice);
+    }
+
+    if (stockAdjust !== undefined) {
+      // Get current stock to ensure it doesn't go below 0
+      const current = await prisma.product.findUnique({ where: { id }, select: { stock: true } });
+      const newStock = Math.max(0, (current?.stock || 0) + parseInt(stockAdjust));
+      updateData.stock = newStock;
+    }
+
+    const product = await prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+
+    return NextResponse.json({ success: true, product });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
   }
 }
 

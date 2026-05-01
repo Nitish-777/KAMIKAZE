@@ -1,24 +1,166 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
+const OTP_EXPIRY_SECONDS = 600; // 10 minutes
+
 export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
+  const [authMode, setAuthMode] = useState('otp'); // 'otp' | 'password'
+  const [otpStep, setOtpStep] = useState('email'); // 'email' | 'verify'
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [canResend, setCanResend] = useState(false);
+  const inputRefs = useRef([]);
   const router = useRouter();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError(''); setLoading(true);
-    const res = await signIn('credentials', { redirect: false, email, password });
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (countdown <= 0) {
+      if (otpStep === 'verify') setCanResend(true);
+      return;
+    }
+    const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [countdown, otpStep]);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // --- Send OTP ---
+  const handleSendOtp = useCallback(async (e) => {
+    if (e) e.preventDefault();
+    if (!email.trim()) { setError('Please enter your email'); return; }
+    setError(''); setSuccess(''); setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setOtpStep('verify');
+        setCountdown(OTP_EXPIRY_SECONDS);
+        setCanResend(false);
+        setOtp(['', '', '', '', '', '']);
+        setSuccess('Verification code sent to ' + email.trim());
+        setTimeout(() => inputRefs.current[0]?.focus(), 100);
+      } else {
+        setError(data.error || 'Failed to send code');
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    }
     setLoading(false);
+  }, [email]);
+
+  // --- Resend OTP ---
+  const handleResendOtp = async () => {
+    setOtp(['', '', '', '', '', '']);
+    setError('');
+    await handleSendOtp();
+  };
+
+  // --- OTP input handlers ---
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      setOtp(pasted.split(''));
+      inputRefs.current[5]?.focus();
+    }
+  };
+
+  // --- Verify OTP ---
+  const handleVerifyOtp = async (e) => {
+    if (e) e.preventDefault();
+    const code = otp.join('');
+    if (code.length !== 6) { setError('Please enter the complete 6-digit code'); return; }
+    setError(''); setLoading(true);
+
+    try {
+      // Step 1: Verify OTP with Supabase (via our API)
+      const verifyRes = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), token: code }),
+      });
+      const verifyData = await verifyRes.json();
+
+      if (!verifyRes.ok) {
+        setError(verifyData.error || 'Verification failed');
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Exchange one-time token for NextAuth session
+      const signInRes = await signIn('credentials', {
+        redirect: false,
+        email: email.trim(),
+        otpToken: verifyData.otpToken,
+      });
+
+      if (signInRes?.error) {
+        setError('Sign in failed. Please try again.');
+      } else {
+        setSuccess('Verified! Redirecting...');
+        router.push('/products');
+        router.refresh();
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  // Auto-submit when 6 digits entered
+  useEffect(() => {
+    if (otp.every(d => d !== '') && otpStep === 'verify') {
+      handleVerifyOtp();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
+
+  // --- Password Login ---
+  const handlePasswordLogin = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password) { setError('Email and password are required'); return; }
+    setError(''); setLoading(true);
+
+    const res = await signIn('credentials', {
+      redirect: false,
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+
     if (res?.error) {
       setError('Invalid email or password');
     } else {
@@ -27,136 +169,240 @@ export default function AuthPage() {
     }
   };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError(''); setSuccess(''); setLoading(true);
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccess('Account created! Signing you in...');
-        // Auto-login after register
-        const loginRes = await signIn('credentials', { redirect: false, email, password });
-        if (loginRes?.ok) {
-          router.push('/products');
-          router.refresh();
-        }
-      } else {
-        setError(data.error || 'Registration failed');
-      }
-    } catch {
-      setError('Something went wrong. Try again.');
-    }
-    setLoading(false);
-  };
-
-  const autofill = (type) => {
-    setEmail(type === 'admin' ? 'admin@kamikaze.com' : type === 'retail' ? 'retail@kamikaze.com' : 'wholesale@kamikaze.com');
-    setPassword('password123');
-    setIsLogin(true);
-  };
-
+  // --- Styles ---
   const containerStyle = {
     display: 'flex', justifyContent: 'center', alignItems: 'center',
-    minHeight: 'calc(100vh - 80px)', padding: '2rem 20px'
+    minHeight: 'calc(100vh - 80px)', padding: '2rem 20px',
   };
 
   const cardStyle = {
     maxWidth: '440px', width: '100%', background: 'white',
     borderRadius: 'var(--rounded-xl)', border: '1px solid var(--color-border)',
-    boxShadow: 'var(--shadow-lg)', overflow: 'hidden'
+    boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
+  };
+
+  const headerStyle = {
+    background: 'var(--color-primary)', padding: '24px', textAlign: 'center', color: 'white',
   };
 
   const tabStyle = (active) => ({
-    flex: 1, padding: '14px', textAlign: 'center', fontWeight: 700,
-    fontSize: '0.95rem', cursor: 'pointer', border: 'none',
+    flex: 1, padding: '12px', textAlign: 'center', fontWeight: 700,
+    fontSize: '0.9rem', cursor: 'pointer', border: 'none',
     background: active ? 'white' : 'var(--color-bg-alt)',
     color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
     borderBottom: active ? '3px solid var(--color-primary)' : '3px solid transparent',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
   });
+
+  const otpInputStyle = {
+    width: '48px', height: '56px', textAlign: 'center',
+    fontSize: '1.4rem', fontWeight: 700, fontFamily: 'var(--font-display)',
+    border: '2px solid var(--color-border)', borderRadius: 'var(--rounded-md)',
+    outline: 'none', transition: 'border-color 0.2s ease',
+  };
+
+  const googleButtonStyle = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+    width: '100%', padding: '12px', borderRadius: 'var(--rounded-md)',
+    border: '1px solid var(--color-border)', background: 'white',
+    color: 'var(--color-text)', fontWeight: 600, fontSize: '0.95rem',
+    cursor: 'pointer', transition: 'all 0.2s ease',
+  };
 
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>
-        {/* Tab Toggle */}
+        {/* Brand Header */}
+        <div style={headerStyle}>
+          <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '3px', fontSize: '1.4rem', margin: 0 }}>
+            KAMIKAZE
+          </h2>
+          <p style={{ opacity: 0.7, fontSize: '0.8rem', marginTop: '4px' }}>Premium Denim & Streetwear</p>
+        </div>
+
+        {/* Auth Mode Tabs */}
         <div style={{ display: 'flex' }}>
-          <button style={tabStyle(isLogin)} onClick={() => { setIsLogin(true); setError(''); setSuccess(''); }}>
-            Sign In
+          <button style={tabStyle(authMode === 'otp')} onClick={() => { setAuthMode('otp'); setError(''); setSuccess(''); }}>
+            Email OTP
           </button>
-          <button style={tabStyle(!isLogin)} onClick={() => { setIsLogin(false); setError(''); setSuccess(''); }}>
-            Create Account
+          <button style={tabStyle(authMode === 'password')} onClick={() => { setAuthMode('password'); setError(''); setSuccess(''); }}>
+            Password
           </button>
         </div>
 
         <div style={{ padding: '2rem' }}>
+          {/* Error / Success messages */}
           {error && (
-            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--rounded-md)', color: '#dc2626', fontSize: '0.85rem', fontWeight: 500, marginBottom: '1rem' }}>
-              {error}
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--rounded-md)', color: '#dc2626', fontSize: '0.85rem', fontWeight: 500, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>⚠</span> {error}
             </div>
           )}
           {success && (
-            <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--rounded-md)', color: '#16a34a', fontSize: '0.85rem', fontWeight: 500, marginBottom: '1rem' }}>
-              {success}
+            <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 'var(--rounded-md)', color: '#16a34a', fontSize: '0.85rem', fontWeight: 500, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>✓</span> {success}
             </div>
           )}
 
-          {isLogin ? (
-            /* Sign In Form */
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {authMode === 'otp' ? (
+            <>
+              {otpStep === 'email' ? (
+                /* Step 1: Enter Email */
+                <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>
+                      Email Address
+                    </label>
+                    <input
+                      type="email" className="input-field" value={email}
+                      onChange={(e) => setEmail(e.target.value)} required
+                      placeholder="you@example.com"
+                      autoFocus
+                      style={{ fontSize: '1rem' }}
+                    />
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                    We&apos;ll send a 6-digit verification code to your email
+                  </p>
+                  <button type="submit" className="btn-primary" disabled={loading}
+                    style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
+                    {loading ? 'Sending...' : 'Send Verification Code'}
+                  </button>
+                </form>
+              ) : (
+                /* Step 2: Enter OTP */
+                <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', margin: '0 0 4px' }}>
+                      Code sent to
+                    </p>
+                    <p style={{ fontWeight: 700, fontSize: '0.95rem', margin: '0 0 4px' }}>{email}</p>
+                    <button type="button" onClick={() => { setOtpStep('email'); setError(''); setSuccess(''); }}
+                      style={{ background: 'none', border: 'none', color: 'var(--color-accent)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+                      Change email
+                    </button>
+                  </div>
+
+                  {/* OTP Input Boxes */}
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', margin: '8px 0' }}>
+                    {otp.map((digit, i) => (
+                      <input
+                        key={i}
+                        ref={el => { inputRefs.current[i] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(i, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                        onPaste={i === 0 ? handleOtpPaste : undefined}
+                        style={{
+                          ...otpInputStyle,
+                          borderColor: digit ? 'var(--color-primary)' : 'var(--color-border)',
+                          boxShadow: digit ? '0 0 0 1px var(--color-primary)' : 'none',
+                        }}
+                        autoFocus={i === 0}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Timer & Resend */}
+                  <div style={{ textAlign: 'center' }}>
+                    {countdown > 0 ? (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                        Code expires in <strong style={{ color: countdown < 60 ? 'var(--color-accent)' : 'var(--color-primary)' }}>{formatTime(countdown)}</strong>
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--color-accent)', fontWeight: 600 }}>
+                        Code expired
+                      </p>
+                    )}
+                    {canResend && (
+                      <button type="button" onClick={handleResendOtp} disabled={loading}
+                        style={{
+                          background: 'none', border: '1px solid var(--color-primary)',
+                          color: 'var(--color-primary)', padding: '8px 20px', borderRadius: 'var(--rounded-md)',
+                          fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', marginTop: '8px',
+                          transition: 'all 0.2s ease',
+                        }}>
+                        {loading ? 'Sending...' : '🔄 Resend Code'}
+                      </button>
+                    )}
+                  </div>
+
+                  <button type="submit" className="btn-primary" disabled={loading || otp.join('').length !== 6}
+                    style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
+                    {loading ? 'Verifying...' : 'Verify & Sign In'}
+                  </button>
+                </form>
+              )}
+            </>
+          ) : (
+            <form onSubmit={handlePasswordLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
-                <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
+                <input type="email" className="input-field" value={email}
+                  onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
-                <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="input-field"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    style={{ paddingRight: '44px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    style={{
+                      position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                      color: 'var(--color-text-muted)', fontSize: '1.1rem', lineHeight: 1,
+                    }}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
               </div>
-              <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '0.5rem' }}>
+              <button type="submit" className="btn-primary" disabled={loading}
+                style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
-          ) : (
-            /* Sign Up Form */
-            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Full Name</label>
-                <input type="text" className="input-field" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Rahul Sharma" />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
-                <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
-                <input type="password" className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Min 6 characters" minLength={6} />
-              </div>
-              <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '0.5rem' }}>
-                {loading ? 'Creating account...' : 'Create Account'}
-              </button>
-            </form>
           )}
 
-          <p style={{ textAlign: 'center', margin: '1.5rem 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <button onClick={() => { setIsLogin(!isLogin); setError(''); }} style={{ color: 'var(--color-primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline' }}>
-              {isLogin ? 'Create one' : 'Sign in'}
-            </button>
-          </p>
-
-          {/* Test Accounts */}
-          <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
-            <p className="text-muted" style={{ marginBottom: '0.75rem', fontSize: '0.75rem' }}>Demo Accounts (password: password123)</p>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-              <button onClick={() => autofill('admin')} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', background: 'var(--color-primary)', color: 'white', border: 'none' }}>Admin</button>
-              <button onClick={() => autofill('retail')} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', background: '#2563eb', color: 'white', border: 'none' }}>Retail</button>
-              <button onClick={() => autofill('wholesale')} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', background: '#7c3aed', color: 'white', border: 'none' }}>Wholesale</button>
-            </div>
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+            <span style={{ padding: '0 12px', fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
           </div>
+
+          {/* Google OAuth */}
+          <button
+            type="button"
+            onClick={() => signIn('google', { callbackUrl: '/products' })}
+            style={googleButtonStyle}
+            onMouseOver={(e) => e.currentTarget.style.background = 'var(--color-bg-alt)'}
+            onMouseOut={(e) => e.currentTarget.style.background = 'white'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            By signing in, you agree to our Terms of Service and Privacy Policy
+          </p>
         </div>
       </div>
     </div>

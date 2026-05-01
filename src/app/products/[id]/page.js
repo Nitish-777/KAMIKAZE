@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import prisma from '@/lib/prisma';
 import styles from './page.module.css';
 import CheckoutButton from './CheckoutButton';
@@ -27,7 +27,9 @@ export default async function ProductDetailPage({ params }) {
 
   if (!product) return <div className="container mt-4">Product Not Found</div>;
 
-  const price = isWholesale ? product.baseWholesalePrice : product.basePrice;
+  const baseDisplayPrice = isWholesale ? product.baseWholesalePrice : product.basePrice;
+  const effectiveSalePrice = product.salePrice && !isWholesale ? product.salePrice : null;
+  const price = effectiveSalePrice ?? baseDisplayPrice;
   const avgRating = reviewAgg._avg.rating || 0;
   const reviewCount = reviewAgg._count || 0;
 
@@ -40,10 +42,19 @@ export default async function ProductDetailPage({ params }) {
       </div>
 
       <div className={styles.infoSection}>
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
           <span className="badge" style={{ background: 'var(--color-primary)' }}>{product.fit}</span>
           <span className="badge" style={{ background: 'var(--color-text-muted)' }}>{product.gender}</span>
           <span className="badge" style={{ background: 'var(--color-text-muted)' }}>{product.category}</span>
+          {product.displayStatus === 'FEATURED' && (
+            <span className="badge" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>⭐ Featured</span>
+          )}
+          {product.displayStatus === 'SPONSORED' && (
+            <span className="badge" style={{ background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' }}>🚀 Sponsored</span>
+          )}
+          {effectiveSalePrice && (
+            <span className="badge" style={{ background: '#dc2626' }}>🔥 On Sale</span>
+          )}
         </div>
 
         <h1 className={styles.title}>{product.name}</h1>
@@ -61,7 +72,22 @@ export default async function ProductDetailPage({ params }) {
           </div>
         )}
 
-        <p className={styles.price}>₹{price.toFixed(2)}</p>
+        {/* Price — shows strikethrough + sale price if on sale */}
+        <div className={styles.price}>
+          {effectiveSalePrice ? (
+            <>
+              <span style={{ textDecoration: 'line-through', color: 'var(--color-text-muted)', fontWeight: 400, fontSize: '1rem', marginRight: '10px' }}>
+                ₹{baseDisplayPrice.toFixed(2)}
+              </span>
+              <span style={{ color: '#dc2626', fontWeight: 800 }}>₹{effectiveSalePrice.toFixed(2)}</span>
+              <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#dc2626', fontWeight: 600 }}>
+                ({Math.round((1 - effectiveSalePrice / product.basePrice) * 100)}% OFF)
+              </span>
+            </>
+          ) : (
+            <>₹{price.toFixed(2)}</>
+          )}
+        </div>
 
         <div style={{ display: 'flex', gap: '1rem', margin: '1rem 0', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
           <span>Color: <strong>{product.color}</strong></span>

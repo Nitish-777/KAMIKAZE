@@ -83,6 +83,19 @@
   animation: pulse 2s infinite;
 }
 
+.saleTag {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: #dc2626;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
 .productInfo {
   padding: 1.25rem;
   display: flex;
