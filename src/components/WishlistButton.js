@@ -39,18 +39,22 @@ export default function WishlistButton({ productId, initialWishlisted }) {
       if (res.ok) {
         const data = await res.json();
         setIsWishlisted(data.wishlisted);
-        showToast(data.wishlisted ? '❤️ Added to Wishlist' : 'Removed from Wishlist');
+        showToast(data.wishlisted ? '❤️ Added to Wishlist' : '🤍 Removed from Wishlist');
         router.refresh();
       } else if (res.status === 401) {
-        setIsWishlisted(previousState); // Revert
-        router.push('/login');
+        setIsWishlisted(previousState);
+        showToast('👤 Please login to save to wishlist');
+        setTimeout(() => router.push('/login'), 1200);
       } else {
-        setIsWishlisted(previousState); // Revert on any other error
-        showToast('Something went wrong. Try again.');
+        // Log exact status to help diagnose
+        const errData = await res.json().catch(() => ({}));
+        console.error('[Wishlist] Error', res.status, errData);
+        setIsWishlisted(previousState);
+        showToast(errData.error || 'Something went wrong. Try again.');
       }
     } catch {
-      setIsWishlisted(previousState); // Revert on network error
-      showToast('Network error. Try again.');
+      setIsWishlisted(previousState);
+      showToast('No internet connection. Try again.');
     } finally {
       setLoading(false);
     }

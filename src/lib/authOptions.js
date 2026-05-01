@@ -98,17 +98,34 @@ export const authOptions = {
       }
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
+        // First login — store id and role from the user object
         token.role = user.role;
         token.id = user.id;
+      }
+      // Safety net: if token.id is missing (old sessions, Google OAuth first-time login)
+      // fetch the user from DB by email to get the correct Prisma ID
+      if (!token.id && token.email) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email.toLowerCase() },
+            select: { id: true, role: true },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+          }
+        } catch (err) {
+          console.error('[JWT] Failed to fetch user from DB:', err);
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.role = token.role;
-        session.user.id = token.id;
+        session.user.role = token.role ?? 'RETAIL';
+        session.user.id = token.id ?? null;
       }
       return session;
     },
