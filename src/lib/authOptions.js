@@ -10,6 +10,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { consumeOtpToken } from "@/lib/otpTokenStore";
+import { checkRateLimit } from "@/lib/rateLimiter";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -87,6 +88,16 @@ export const authOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile, email, credentials }) {
+      const userEmail = user?.email || email;
+      if (userEmail) {
+        const { allowed } = checkRateLimit(null, userEmail, 'oauth');
+        if (!allowed) {
+          throw new Error("RateLimitExceeded");
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role;

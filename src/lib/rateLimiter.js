@@ -10,6 +10,7 @@ const CLEANUP_INTERVAL_MS = 60_000; // Clean up every 60s
 const RATE_LIMIT_CONFIG = {
   default: { limit: 100, windowMs: 15 * 60 * 1000 },
   auth: { limit: 5, windowMs: 15 * 60 * 1000 },
+  oauth: { limit: 5, windowMs: 10 * 60 * 1000 }, // 5 logins per 10 mins
   register: { limit: 3, windowMs: 60 * 60 * 1000 },
   reviews: { limit: 10, windowMs: 60 * 60 * 1000 },
   orders: { limit: 20, windowMs: 60 * 60 * 1000 },
@@ -32,6 +33,7 @@ function lazyCleanup() {
 }
 
 export function getClientIP(req) {
+  if (!req || !req.headers) return 'unknown';
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
     return forwarded.split(',')[0].trim();

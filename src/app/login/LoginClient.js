@@ -23,6 +23,8 @@ export default function LoginClient({ initialError }) {
       ? 'An account already exists with this email. Please sign in with a password or magic link first.'
       : initialError === 'OAuthCallbackError'
       ? 'Google login was interrupted or failed. Please try again.'
+      : initialError === 'RateLimitExceeded' || initialError === 'AccessDenied'
+      ? 'Too many login attempts. Please try again after 10 minutes.'
       : initialError
   );
   const [success, setSuccess] = useState('');
