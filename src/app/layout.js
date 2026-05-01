@@ -6,7 +6,10 @@ import PageTracker from '@/components/PageTracker';
 export const metadata = {
   title: 'Kamikaze Jeans | Premium Denim & Streetwear',
   description: 'The highest quality premium denim. Retail and wholesale available.',
-  metadataBase: new URL('http://localhost:3000'),
+  metadataBase: new URL('https://kamikaze-one.vercel.app'),
+  verification: {
+    google: 'f5esZUGfd4eK5N8-Rlo0qa0ix7awNSgfdKlQEH6ctDI',
+  },
 };
 
 const MuteReactDevTools = `
