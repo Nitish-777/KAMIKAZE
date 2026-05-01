@@ -14,6 +14,10 @@ export default function WishlistButton({ productId, initialWishlisted }) {
     if (loading) return;
     setLoading(true);
 
+    // Optimistic update
+    const previousState = isWishlisted;
+    setIsWishlisted(!previousState);
+
     try {
       const res = await fetch('/api/wishlist', {
         method: 'POST',
@@ -26,11 +30,15 @@ export default function WishlistButton({ productId, initialWishlisted }) {
         setIsWishlisted(data.wishlisted);
         router.refresh(); // Update the navbar count if necessary
       } else if (res.status === 401) {
-        // User is not logged in
+        // User is not logged in, revert and redirect
+        setIsWishlisted(previousState);
         router.push('/login');
+      } else {
+        setIsWishlisted(previousState);
       }
     } catch (err) {
       console.error('Failed to toggle wishlist', err);
+      setIsWishlisted(previousState);
     } finally {
       setLoading(false);
     }
