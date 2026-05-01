@@ -11,7 +11,7 @@ export async function POST(req) {
       return rateLimitCheck.response;
     }
 
-    const { name, email, password } = await req.json();
+    let { name, email, password } = await req.json();
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
@@ -21,6 +21,8 @@ export async function POST(req) {
     if (!emailRegex.test(email.trim())) {
       return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
+    
+    email = email.trim().toLowerCase();
 
     if (password.length < 6) {
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });

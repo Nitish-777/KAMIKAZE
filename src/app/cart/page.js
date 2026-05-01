@@ -14,15 +14,49 @@ export default function CartPage() {
   const [paymentMode, setPaymentMode] = useState('CASH_ON_DELIVERY');
   const [errors, setErrors] = useState({});
   const [details, setDetails] = useState({ customerName: '', customerPhone: '', customerEmail: '', shippingAddress: '', shippingCity: '', shippingState: '', shippingPincode: '' });
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const router = useRouter();
 
-  const fetchCart = async () => {
+  const fetchCartAndAddresses = async () => {
+    // Fetch cart
     const res = await fetch('/api/cart');
     if (res.ok) setItems(await res.json());
+
+    // Fetch addresses (this also acts as a session check)
+    const addrRes = await fetch('/api/addresses');
+    if (addrRes.ok) {
+      const addrs = await addrRes.json();
+      setSavedAddresses(addrs);
+      setIsGuest(false);
+      // Autofill default address if available
+      const defAddr = addrs.find(a => a.isDefault) || addrs[0];
+      if (defAddr) {
+        setDetails(prev => ({
+          ...prev,
+          customerName: defAddr.name,
+          customerPhone: defAddr.phone,
+          shippingAddress: defAddr.address,
+          shippingCity: defAddr.city,
+          shippingState: defAddr.state,
+          shippingPincode: defAddr.pincode
+        }));
+      }
+    } else {
+      setIsGuest(true);
+      // Guest: Load from localStorage
+      try {
+        const saved = localStorage.getItem('guestCheckoutDetails');
+        if (saved) {
+          setDetails(JSON.parse(saved));
+        }
+      } catch (e) {}
+    }
     setLoading(false);
   };
 
-  useEffect(() => { fetchCart(); }, []);
+  useEffect(() => { fetchCartAndAddresses(); }, []);
 
   const updateQty = async (cartItemId, quantity) => {
     await fetch('/api/cart', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cartItemId, quantity }) });
@@ -62,6 +96,27 @@ export default function CartPage() {
   const placeOrder = async (paymentId = null) => {
     if (!validateDetails()) return;
     setPlacing(true);
+
+    // Save details for next time
+    if (isGuest) {
+      localStorage.setItem('guestCheckoutDetails', JSON.stringify(details));
+    } else if (saveNewAddress) {
+      await fetch('/api/addresses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: 'New Address',
+          name: details.customerName,
+          phone: details.customerPhone,
+          address: details.shippingAddress,
+          city: details.shippingCity,
+          state: details.shippingState,
+          pincode: details.shippingPincode,
+          isDefault: false
+        })
+      });
+    }
+
     const res = await fetch('/api/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -200,6 +255,34 @@ export default function CartPage() {
       ) : (
         /* Checkout Form */
         <div style={{ maxWidth: '600px', marginTop: '1.5rem' }}>
+          {savedAddresses.length > 0 && (
+            <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--color-bg-alt)', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-border)' }}>
+              <label style={labelStyle}>Use a Saved Address</label>
+              <select 
+                className="input-field" 
+                onChange={(e) => {
+                  const addr = savedAddresses.find(a => a.id === e.target.value);
+                  if (addr) {
+                    setDetails(prev => ({
+                      ...prev,
+                      customerName: addr.name,
+                      customerPhone: addr.phone,
+                      shippingAddress: addr.address,
+                      shippingCity: addr.city,
+                      shippingState: addr.state,
+                      shippingPincode: addr.pincode
+                    }));
+                  }
+                }}
+              >
+                <option value="">-- Select Address --</option>
+                {savedAddresses.map(a => (
+                  <option key={a.id} value={a.id}>{a.label}: {a.address}, {a.city}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div><label style={labelStyle}>Full Name *</label><input name="customerName" value={details.customerName} onChange={handleDetailChange} className="input-field" />{errors.customerName && <p style={errorStyle}>{errors.customerName}</p>}</div>
             <div><label style={labelStyle}>Phone *</label><input name="customerPhone" value={details.customerPhone} onChange={handleDetailChange} className="input-field" maxLength={10} />{errors.customerPhone && <p style={errorStyle}>{errors.customerPhone}</p>}</div>
@@ -209,6 +292,15 @@ export default function CartPage() {
             <div><label style={labelStyle}>State *</label><select name="shippingState" value={details.shippingState} onChange={handleDetailChange} className="input-field"><option value="">Select</option>{INDIAN_STATES.map(s => <option key={s}>{s}</option>)}</select>{errors.shippingState && <p style={errorStyle}>{errors.shippingState}</p>}</div>
             <div><label style={labelStyle}>Pincode *</label><input name="shippingPincode" value={details.shippingPincode} onChange={handleDetailChange} className="input-field" maxLength={6} />{errors.shippingPincode && <p style={errorStyle}>{errors.shippingPincode}</p>}</div>
           </div>
+
+          {!isGuest && (
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={saveNewAddress} onChange={(e) => setSaveNewAddress(e.target.checked)} />
+                Save this as a new address for next time
+              </label>
+            </div>
+          )}
 
           <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>Payment</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

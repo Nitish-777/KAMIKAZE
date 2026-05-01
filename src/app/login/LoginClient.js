@@ -304,19 +304,22 @@ export default function LoginClient({ initialError }) {
             /* Sign Up Form */
             <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Full Name</label>
-                <input type="text" className="input-field" value={regName}
+                <label htmlFor="reg-name" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Full Name</label>
+                <input id="reg-name" name="name" autoComplete="name" type="text" className="input-field" value={regName}
                   onChange={(e) => setRegName(e.target.value)} required placeholder="John Doe" />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
-                <input type="email" className="input-field" value={regEmail}
+                <label htmlFor="reg-email" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
+                <input id="reg-email" name="email" autoComplete="email" type="email" className="input-field" value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)} required placeholder="you@example.com" />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
+                <label htmlFor="reg-password" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
                 <div style={{ position: 'relative' }}>
                   <input
+                    id="reg-password"
+                    name="password"
+                    autoComplete="new-password"
                     type={showPassword ? 'text' : 'password'}
                     className="input-field"
                     value={regPassword}
@@ -347,6 +350,12 @@ export default function LoginClient({ initialError }) {
           ) : (
             /* Sign In Form */
             <>
+              <div style={{ padding: '12px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 'var(--rounded-md)', marginBottom: '1.5rem', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#1e3a8a', fontWeight: 500 }}>
+                  New to Kamikaze? <button type="button" onClick={() => setTab('signup')} style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>Please Sign Up</button> to create your account!
+                </p>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', background: 'var(--color-bg-alt)', padding: '4px', borderRadius: 'var(--rounded-md)' }}>
                 <button
                   type="button"
@@ -369,8 +378,8 @@ export default function LoginClient({ initialError }) {
                   {otpStep === 'email' ? (
                     <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                       <div>
-                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email Address</label>
-                        <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" autoFocus style={{ fontSize: '1rem' }} />
+                        <label htmlFor="otp-email" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email Address</label>
+                        <input id="otp-email" name="email" autoComplete="email" type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" autoFocus style={{ fontSize: '1rem' }} />
                       </div>
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>We&apos;ll send a 6-digit verification code to your email</p>
                       <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '14px', fontSize: '1rem' }}>
@@ -408,13 +417,13 @@ export default function LoginClient({ initialError }) {
               ) : (
                 <form onSubmit={handlePasswordLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
-                    <input type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
+                    <label htmlFor="signin-email" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Email</label>
+                    <input id="signin-email" name="email" autoComplete="email" type="email" className="input-field" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
+                    <label htmlFor="signin-password" style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.85rem' }}>Password</label>
                     <div style={{ position: 'relative' }}>
-                      <input type={showPassword ? 'text' : 'password'} className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" style={{ paddingRight: '44px' }} />
+                      <input id="signin-password" name="password" autoComplete="current-password" type={showPassword ? 'text' : 'password'} className="input-field" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" style={{ paddingRight: '44px' }} />
                       <button type="button" onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--color-text-muted)', fontSize: '1.1rem', lineHeight: 1 }}>{showPassword ? '🙈' : '👁️'}</button>
                     </div>
                   </div>

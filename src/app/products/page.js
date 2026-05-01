@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/authOptions';
 import prisma from '@/lib/prisma';
 import styles from './page.module.css';
 import ProductFilters from './ProductFilters';
+import WishlistButton from '@/components/WishlistButton';
 
 export const metadata = { title: 'Collection | Kamikaze Jeans' };
 
@@ -12,6 +13,15 @@ export default async function ProductsPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   const isWholesale = session?.user?.role === 'WHOLESALE_APPROVED';
   const sp = await searchParams;
+
+  let wishlistIds = new Set();
+  if (session?.user?.id) {
+    const wishlistItems = await prisma.wishlistItem.findMany({
+      where: { userId: session.user.id },
+      select: { productId: true }
+    });
+    wishlistIds = new Set(wishlistItems.map(item => item.productId));
+  }
 
   const page = parseInt(sp?.page || '1');
   const limit = 12;
@@ -107,6 +117,7 @@ export default async function ProductsPage({ searchParams }) {
             className={styles.productImage}
             priority={index < 4}
           />
+          <WishlistButton productId={product.id} initialWishlisted={wishlistIds.has(product.id)} />
           {product.stock === 0 && <div className={styles.soldOut}>Sold Out</div>}
           {isFeatured && (
             <div className={styles.featuredTag} style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
